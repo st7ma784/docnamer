@@ -1,0 +1,89 @@
+replicaCount: 1  # must be 1 — SQLite on a ReadWriteOnce PVC does not support multiple replicas
+
+image:
+  repository: ghcr.io/st7ma784/docnamer  # replace OWNER with your GitHub org/username
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# Credentials for private container registries.
+# Example: [{ name: ghcr-credentials }]
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: docnamer.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+persistence:
+  enabled: true
+  storageClass: ""       # leave blank for cluster default
+  accessMode: ReadWriteOnce
+  size: 10Gi
+
+# UI authentication (HTTP Basic Auth)
+# AUTH_PASSWORD must be set for any internet-facing deployment.
+# Leave empty only for local dev / isolated networks.
+auth:
+  username: admin
+  password: ""           # ← set this; empty = no auth (dev only)
+
+# Comma-separated list of allowed CORS origins.
+# Defaults to the first ingress host when ingress is enabled. Override explicitly
+# if you front the app with a CDN or different hostname.
+allowedOrigins: ""  # leave blank to auto-derive from ingress.hosts[0]
+
+# IMAP mail server credentials — override via Rancher Secrets or --set
+# These are passed as environment variables; can also be set via the UI.
+imap:
+  host: ""
+  port: 993
+  username: ""
+  password: ""
+  useSsl: "true"
+  mailbox: "INBOX"
+
+# LLM service configuration
+llm:
+  baseUrl: "http://{{ .Release.Name }}-ollama:11434"
+  model: "llama3.2"
+  # Max characters of document text sent to the LLM (guards against context overflow)
+  maxChars: "24000"
+
+# Ollama configuration
+ollama:
+  enabled: true
+  image:
+    repository: ollama/ollama
+    tag: "0.3.12"
+  # Model to pull on first startup (init container)
+  model: "llama3.2"
+  persistence:
+    enabled: true
+    size: 20Gi
+  resources:
+    requests:
+      memory: "4Gi"
+      cpu: "1"
+    limits:
+      memory: "8Gi"
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

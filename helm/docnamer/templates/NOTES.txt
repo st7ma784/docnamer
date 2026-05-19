@@ -1,0 +1,27 @@
+DocNamer has been deployed.
+
+{{- if gt (int .Values.replicaCount) 1 }}
+
+  *** WARNING ***
+  replicaCount is set to {{ .Values.replicaCount }}, but DocNamer uses SQLite on a
+  ReadWriteOnce PVC. Running more than one replica will cause database corruption.
+  Set replicaCount: 1.
+
+{{- end }}
+
+{{- if not .Values.auth.password }}
+
+  *** WARNING ***
+  AUTH_PASSWORD is not set. The UI is unprotected.
+  Set auth.password in your Rancher Secret or Helm values before exposing this
+  deployment to any network.
+
+{{- end }}
+
+{{- if .Values.ingress.enabled }}
+  App URL: https://{{ (first .Values.ingress.hosts).host }}
+{{- else }}
+  Ingress is disabled. Access the app via:
+    kubectl port-forward svc/{{ include "docnamer.fullname" . }} 8000:8000 -n {{ .Release.Namespace }}
+  then open http://localhost:8000
+{{- end }}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: docnamer
+description: Automatic document naming from scanned Outlook mail
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DocNamer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<header>
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="16" y1="13" x2="8" y2="13"/>
+    <line x1="16" y1="17" x2="8" y2="17"/>
+  </svg>
+  <h1>DocNamer</h1>
+  <span class="subtitle">Automatic document naming from scanned mail</span>
+</header>
+
+<div class="app">
+
+  <nav class="steps">
+    <ul>
+      <li class="step-item active" data-tab="0"><span class="step-num">1</span> Configure</li>
+      <li class="step-item"        data-tab="1"><span class="step-num">2</span> Mail server</li>
+      <li class="step-item"        data-tab="2"><span class="step-num">3</span> Process</li>
+      <li class="step-item"        data-tab="3"><span class="step-num">4</span> Results</li>
+    </ul>
+  </nav>
+
+  <main class="panel">
+
+    <!-- ── Tab 0: Configure ── -->
+    <div id="tab-0" class="tab active">
+      <h2 class="panel-title">Client Configuration</h2>
+      <p class="panel-desc">Enter the client details that will be embedded in every filename.</p>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="clientName">Client Name</label>
+          <input type="text" id="clientName" placeholder="e.g. John Smith" />
+        </div>
+        <div class="form-group">
+          <label for="clientCode">Client Code</label>
+          <input type="text" id="clientCode" placeholder="e.g. RMASS1234" />
+        </div>
+        <div class="form-group">
+          <label for="dateFrom">Emails received from</label>
+          <input type="date" id="dateFrom" />
+        </div>
+        <div class="form-group">
+          <label for="dateTo">Emails received to</label>
+          <input type="date" id="dateTo" />
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="saveConfig()">Save &amp; Continue</button>
+      </div>
+    </div>
+
+    <!-- ── Tab 1: Mail server ── -->
+    <div id="tab-1" class="tab">
+      <h2 class="panel-title">Mail Server</h2>
+      <p class="panel-desc">Connect directly to your IMAP server — everything stays on your network.</p>
+
+      <div class="connect-status" id="connectStatus">
+        <span id="mailBadge" class="badge badge-disconnected"><span class="dot"></span> Not configured</span>
+        <div class="connect-info">
+          <h3 id="mailLabel">Enter your IMAP details below</h3>
+          <p id="mailSub">Credentials are stored locally on this server only.</p>
+        </div>
+      </div>
+
+      <div class="form-grid" style="margin-bottom:20px">
+        <div class="form-group">
+          <label for="imapHost">IMAP server hostname</label>
+          <input type="text" id="imapHost" placeholder="mail.example.com or 192.168.1.10" />
+        </div>
+        <div class="form-group">
+          <label for="imapPort">Port</label>
+          <input type="text" id="imapPort" value="993" placeholder="993" />
+        </div>
+        <div class="form-group">
+          <label for="imapUser">Username / email address</label>
+          <input type="text" id="imapUser" placeholder="scanner@example.com" autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label for="imapPass">Password</label>
+          <input type="password" id="imapPass" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <div class="form-group">
+          <label for="imapMailbox">Mailbox / folder</label>
+          <input type="text" id="imapMailbox" value="INBOX" placeholder="INBOX" />
+        </div>
+        <div class="form-group" style="justify-content:flex-end;padding-top:10px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400">
+            <input type="checkbox" id="imapSSL" checked />
+            Use SSL/TLS
+          </label>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" onclick="saveMailConfig()">Save</button>
+        <button class="btn btn-outline" onclick="testMailConfig()" id="testBtn">Test connection</button>
+        <button class="btn btn-outline" id="continueMailBtn" style="display:none"
+                onclick="showTab(2);updateConfigBar()">Continue →</button>
+      </div>
+
+      <div id="testResult" style="display:none;margin-top:14px"></div>
+
+      <div class="callout callout-info">
+        Works with any IMAP server — on-premise Exchange, Dovecot, Postfix, or hosted.
+        Use an <em>app password</em> rather than your main account password where possible.
+      </div>
+    </div>
+
+    <!-- ── Tab 2: Process ── -->
+    <div id="tab-2" class="tab">
+      <h2 class="panel-title">Process Documents</h2>
+      <p class="panel-desc">DocNamer will scan your inbox for photocopier emails, extract PDFs, and name them.</p>
+
+      <div id="configBar" class="config-bar" style="display:none"></div>
+
+      <div id="scanActions">
+        <button class="btn btn-success" id="startBtn" onclick="startScan()">Start Scan</button>
+      </div>
+
+      <div id="scanProgress" style="display:none;margin-top:20px">
+        <div class="progress-wrap">
+          <div class="progress-meta">
+            <span id="progressLabel">Starting…</span>
+            <span id="progressCount"></span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        </div>
+        <div id="log"></div>
+        <div style="margin-bottom:12px">
+          <button class="btn btn-outline btn-sm" id="cancelBtn" onclick="cancelScan()" style="display:none">
+            ✕ Cancel
+          </button>
+        </div>
+      </div>
+
+      <!-- Watch mode -->
+      <div class="watch-panel" id="watchPanel">
+        <div class="watch-header">
+          <div>
+            <strong>Watch mode</strong>
+            <span id="watchBadge" class="badge badge-disconnected" style="margin-left:8px"><span class="dot"></span>Off</span>
+          </div>
+          <label class="toggle" title="Enable automatic scanning">
+            <input type="checkbox" id="watchToggle" onchange="toggleWatch()" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div id="watchConfig" style="display:none">
+          <div class="form-grid" style="margin-top:14px">
+            <div class="form-group">
+              <label for="watchInterval">Check every</label>
+              <select id="watchInterval">
+                <option value="5">5 minutes</option>
+                <option value="10" selected>10 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">1 hour</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="watchLookback">Scan back</label>
+              <select id="watchLookback">
+                <option value="1">1 day</option>
+                <option value="3">3 days</option>
+                <option value="7" selected>7 days</option>
+                <option value="14">14 days</option>
+              </select>
+            </div>
+          </div>
+          <p style="font-size:.83rem;color:var(--gray-400);margin-top:10px">
+            Uses the client configured in Step 1. The lookback window is how far back each
+            check looks — already-processed PDFs are skipped automatically.
+          </p>
+          <div style="margin-top:12px">
+            <button class="btn btn-outline btn-sm" onclick="saveWatchSettings()">Save settings</button>
+          </div>
+          <div id="watchStatus" style="font-size:.83rem;color:var(--gray-400);margin-top:8px"></div>
+        </div>
+      </div>
+
+      <!-- Shown when scan completes — big download CTA -->
+      <div id="scanDone" class="scan-done-banner" style="display:none">
+        <h3 id="scanDoneTitle">✓ Scan complete</h3>
+        <div class="scan-done-actions">
+          <a id="scanDoneDownload" class="btn-download" href="#" download>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download All
+          </a>
+          <button class="btn btn-outline" onclick="goToResults()">View document list →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Tab 3: Results ── -->
+    <div id="tab-3" class="tab">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 class="panel-title" style="margin-bottom:0">Results</h2>
+        <button class="btn btn-outline btn-sm" onclick="loadJobs()">↻ Refresh</button>
+      </div>
+      <div id="jobCards" class="job-cards">
+        <div class="no-jobs">
+          <p>No scans yet — complete Steps 1–3 to get started.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

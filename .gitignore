@@ -1,0 +1,33 @@
+# Environment / secrets
+.env
+*.env.*
+
+# Runtime data
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Generated output
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# Node (if frontend tooling is ever added)
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

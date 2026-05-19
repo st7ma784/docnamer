@@ -1,0 +1,55 @@
+defaultNamespace: docnamer
+
+helm:
+  chart: ./helm/docnamer
+
+  # ── Override values ────────────────────────────────────────────────────────
+  # Keep secrets OUT of Git. Deliver them via a Rancher Secret (see valuesFrom
+  # below) or an external-secrets operator.
+  values:
+    image:
+      # Update repository to match your registry (set by CI on tag push).
+      repository: ghcr.io/st7ma784/docnamer  # replace OWNER
+      tag: "0.1.0"
+
+    ingress:
+      enabled: true
+      className: nginx
+      hosts:
+        - host: docnamer.stevemander.uk       # ← change this
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - secretName: docnamer-tls
+          hosts:
+            - docnamer.stevemander.uk
+
+    llm:
+      model: llama3.2
+
+    ollama:
+      model: llama3.2
+
+  # ── Secret values via Rancher ──────────────────────────────────────────────
+  # Create a Rancher Secret in the docnamer namespace with the key values.yaml
+  # containing the sensitive overrides, for example:
+  #
+  #   auth:
+  #     username: admin
+  #     password: <strong-password>
+  #   imap:
+  #     host: mail.example.com
+  #     port: 993
+  #     username: scanner@example.com
+  #     password: <app-password>
+  #     useSsl: "true"
+  #     mailbox: INBOX
+  #
+  # Then uncomment and fill in the block below:
+  #
+  valuesFrom:
+    - secretKeyRef:
+        name: docnamer-credentials   # name of the Rancher Secret
+        key: values.yaml
+        optional: false
