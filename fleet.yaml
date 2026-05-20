@@ -3,27 +3,11 @@ defaultNamespace: docnamer
 helm:
   chart: ./helm/docnamer
 
-  # ── Override values ────────────────────────────────────────────────────────
-  # Keep secrets OUT of Git. Deliver them via a Rancher Secret (see valuesFrom
-  # below) or an external-secrets operator.
+  # ── Base values (no domain-specific config here) ───────────────────────────
   values:
     image:
-      # Update repository to match your registry (set by CI on tag push).
-      repository: ghcr.io/st7ma784/docnamer  # replace OWNER
+      repository: ghcr.io/st7ma784/docnamer
       tag: "0.1.0"
-
-    ingress:
-      enabled: true
-      className: nginx
-      hosts:
-        - host: docnamer.stevemander.uk       # ← change this
-          paths:
-            - path: /
-              pathType: Prefix
-      tls:
-        - secretName: docnamer-tls
-          hosts:
-            - docnamer.stevemander.uk
 
     llm:
       model: llama3.2
@@ -32,12 +16,8 @@ helm:
       model: llama3.2
 
   # ── Secret values via Rancher ──────────────────────────────────────────────
-  # Create a Rancher Secret in the docnamer namespace with the key values.yaml
-  # containing the sensitive overrides, for example:
+  # Create a Rancher Secret in the docnamer namespace with key values.yaml:
   #
-  #   auth:
-  #     username: admin
-  #     password: <strong-password>
   #   imap:
   #     host: mail.example.com
   #     port: 993
@@ -46,10 +26,34 @@ helm:
   #     useSsl: "true"
   #     mailbox: INBOX
   #
-  # Then uncomment and fill in the block below:
-  #
+  # auth.password is auto-generated on first install if not provided here.
   valuesFrom:
     - secretKeyRef:
-        name: docnamer-credentials   # name of the Rancher Secret
+        name: docnamer-credentials
         key: values.yaml
-        optional: false
+        optional: true   # allow first-boot before the secret exists
+
+# ── Per-cluster ingress — domain read from the cluster label ────────────────
+# Rancher patches each cluster with {"metadata":{"labels":{"domain":"..."}}}
+# shortly after registration. Fleet substitutes ${cluster.metadata.labels.domain}
+# before rendering the Helm chart, so no domain is hardcoded in Git.
+targetCustomizations:
+  - name: cluster-with-domain
+    clusterSelector:
+      matchExpressions:
+        - key: domain
+          operator: Exists
+    helm:
+      values:
+        ingress:
+          enabled: true
+          className: nginx
+          hosts:
+            - host: "docnamer.${cluster.metadata.labels.domain}"
+              paths:
+                - path: /
+                  pathType: Prefix
+          tls:
+            - secretName: docnamer-tls
+              hosts:
+                - "docnamer.${cluster.metadata.labels.domain}"

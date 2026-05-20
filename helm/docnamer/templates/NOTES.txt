@@ -11,10 +11,10 @@ DocNamer has been deployed.
 
 {{- if not .Values.auth.password }}
 
-  *** WARNING ***
-  AUTH_PASSWORD is not set. The UI is unprotected.
-  Set auth.password in your Rancher Secret or Helm values before exposing this
-  deployment to any network.
+  AUTH_PASSWORD was auto-generated. Retrieve it with:
+    kubectl get secret {{ include "docnamer.fullname" . }}-env \
+      -n {{ .Release.Namespace }} \
+      -o jsonpath='{.data.AUTH_PASSWORD}' | base64 -d && echo
 
 {{- end }}
 
