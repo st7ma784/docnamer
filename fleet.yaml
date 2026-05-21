@@ -49,11 +49,11 @@ targetCustomizations:
           enabled: true
           className: nginx
           hosts:
-            - host: "docnamer.${cluster.metadata.labels.domain}"
+            - host: "docnamer.${cluster.labels.domain}"
               paths:
                 - path: /
                   pathType: Prefix
           tls:
             - secretName: docnamer-tls
               hosts:
-                - "docnamer.${cluster.metadata.labels.domain}"
+                - "docnamer.${cluster.labels.domain}"
