@@ -177,7 +177,7 @@ def cancel_job(job_id: str):
 
 
 @app.get("/jobs/{job_id}/events")
-async def job_events(job_id: str):
+async def job_events(job_id: str, request: Request):
     if not db.get_job(job_id):
         raise HTTPException(status_code=404, detail="Job not found")
 

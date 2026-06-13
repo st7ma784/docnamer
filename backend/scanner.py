@@ -61,23 +61,28 @@ async def run_scan_job(job_id: str):
 
     db.add_event(job_id, "info", f"Found {len(emails)} scanner email(s) — processing…")
 
-    for idx, email_msg in enumerate(emails):
+    try:
+        for idx, email_msg in enumerate(emails):
+            if _is_cancelled(job_id):
+                db.add_event(job_id, "warn", "Scan cancelled.")
+                return
+            await _process_email(job, email_msg, job_dir)
+            db.update_job(job_id, processed_emails=idx + 1)
+
         if _is_cancelled(job_id):
-            db.add_event(job_id, "warn", "Scan cancelled.")
             return
-        await _process_email(job, email_msg, job_dir)
-        db.update_job(job_id, processed_emails=idx + 1)
 
-    if _is_cancelled(job_id):
-        return
+        zip_path = OUTPUT_DIR / f"{job_id}.zip"
+        db.add_event(job_id, "info", "Building download archive…")
+        await loop.run_in_executor(None, build_zip, job_dir, zip_path)
 
-    zip_path = OUTPUT_DIR / f"{job_id}.zip"
-    db.add_event(job_id, "info", "Building download archive…")
-    await loop.run_in_executor(None, build_zip, job_dir, zip_path)
-
-    doc_count = db.get_job(job_id)["total_documents"]
-    db.update_job_status(job_id, "completed")
-    db.add_event(job_id, "success", f"Done — {doc_count} document(s) ready to download.")
+        doc_count = db.get_job(job_id)["total_documents"]
+        db.update_job_status(job_id, "completed")
+        db.add_event(job_id, "success", f"Done — {doc_count} document(s) ready to download.")
+    except Exception as exc:
+        log.exception("Scan job %s failed unexpectedly", job_id)
+        db.update_job_status(job_id, "failed")
+        db.add_event(job_id, "error", f"Scan failed unexpectedly: {exc}")
 
 
 # ── Email / PDF processing ────────────────────────────────────────────────────
@@ -158,6 +163,7 @@ async def _process_pdf(
 
     # ── Slice and save ────────────────────────────────────────────────────────
     first_filename = None
+    covered_pages: list[int] = []
     for seg in segments:
         try:
             # Map LLM page numbers → original PDF page numbers
@@ -194,9 +200,27 @@ async def _process_pdf(
             db.add_event(job["id"], "success", f"Saved: {out_path.name}")
             if first_filename is None:
                 first_filename = out_path.name
+            covered_pages.extend(range(start_pdf, end_pdf + 1))
 
         except Exception as exc:
             db.add_event(job["id"], "error", f"Failed to extract segment: {exc}")
+
+    # ── Page coverage check ───────────────────────────────────────────────────
+    # Every page sent to the LLM should end up in exactly one output document.
+    # Pages missing here were silently dropped; pages appearing twice were
+    # duplicated across two output files — both indicate LLM mis-segmentation.
+    expected_pages = set(page_map.values())
+    covered_set = set(covered_pages)
+    missing_pages = sorted(expected_pages - covered_set)
+    if missing_pages:
+        db.add_event(job["id"], "warn",
+            f"{att_name}: page(s) {missing_pages} were not included in any output "
+            f"document — the LLM's page ranges may have missed content.")
+    duplicate_pages = sorted({p for p in covered_pages if covered_pages.count(p) > 1})
+    if duplicate_pages:
+        db.add_event(job["id"], "warn",
+            f"{att_name}: page(s) {duplicate_pages} appear in more than one output "
+            f"document — the LLM's page ranges overlapped.")
 
     # Register hash after at least one segment was saved successfully
     if first_filename:

@@ -66,3 +66,12 @@ PHOTOCOPIER_SUBJECT_KEYWORDS = [
     "scan", "scanned", "scanned document", "image from",
     "scanned from", "device", "mfp", "multifunction",
 ]
+
+# Phrases found in the *body* of scanner emails (the standard MFP cover note),
+# e.g. "Device Name: ...", "Device Model: ...", "Attached file is scanned
+# image in PDF format". Useful when the From address and subject don't carry
+# any of the keywords above (e.g. a generic "copier@yourdomain.org" sender).
+PHOTOCOPIER_BODY_KEYWORDS = [
+    "scanned image", "scanned document", "device name", "device model",
+    "file format: pdf", "scan to email", "resolution:",
+]

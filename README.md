@@ -36,6 +36,10 @@ open http://localhost:8000
 
 No Azure account, no Microsoft login, no internet connection required after the model is downloaded.
 
+> **Demoing this to someone?** See [`docs/DEMO.md`](docs/DEMO.md) for a
+> step-by-step runbook, including a script that emails a fake "scan" to a
+> test mailbox so you don't need a physical photocopier.
+
 ---
 
 ## IMAP compatibility
@@ -157,6 +161,8 @@ docnamer/
 │       └── pdf_slicer.py    # PDF page extraction & zip building
 ├── frontend/                # Vanilla JS SPA (no build step)
 ├── helm/docnamer/           # Helm chart for Kubernetes / Rancher
+├── docs/DEMO.md             # Demo / quick-start runbook
+├── scripts/send_test_scan.py # Emails a fake "scan" for demos (no copier needed)
 ├── fleet.yaml               # Rancher Fleet GitOps entrypoint
 ├── Dockerfile
 ├── docker-compose.yml

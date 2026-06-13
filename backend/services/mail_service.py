@@ -10,6 +10,7 @@ Credentials are loaded in priority order:
 import email
 import imaplib
 import json
+import re
 import socket
 from datetime import datetime, timedelta
 from email.header import decode_header as _decode_header
@@ -17,8 +18,8 @@ from email.header import decode_header as _decode_header
 from config import (
     IMAP_HOST, IMAP_MAILBOX, IMAP_PASSWORD, IMAP_PORT, IMAP_USE_SSL,
     IMAP_USERNAME, MAIL_CONFIG_PATH,
-    PHOTOCOPIER_FROM_DOMAINS, PHOTOCOPIER_FROM_KEYWORDS,
-    PHOTOCOPIER_SUBJECT_KEYWORDS,
+    PHOTOCOPIER_BODY_KEYWORDS, PHOTOCOPIER_FROM_DOMAINS,
+    PHOTOCOPIER_FROM_KEYWORDS, PHOTOCOPIER_SUBJECT_KEYWORDS,
 )
 
 
@@ -108,9 +109,10 @@ def _decode_str(raw) -> str:
     return "".join(out)
 
 
-def _is_photocopier(from_str: str, subject_str: str) -> bool:
+def _is_photocopier(from_str: str, subject_str: str, body_str: str = "") -> bool:
     from_lower = from_str.lower()
     subject_lower = subject_str.lower()
+    body_lower = body_str.lower()
     for kw in PHOTOCOPIER_FROM_KEYWORDS:
         if kw in from_lower:
             return True
@@ -120,7 +122,48 @@ def _is_photocopier(from_str: str, subject_str: str) -> bool:
     for kw in PHOTOCOPIER_SUBJECT_KEYWORDS:
         if kw in subject_lower:
             return True
+    for kw in PHOTOCOPIER_BODY_KEYWORDS:
+        if kw in body_lower:
+            return True
     return False
+
+
+# Limit how much body text we scan for keywords — cover notes are short,
+# this just avoids decoding/scanning huge HTML bodies on non-scanner emails.
+_BODY_SCAN_CHARS = 2000
+
+
+def _extract_body_text(msg) -> str:
+    """Best-effort plain-text extraction of an email's body for keyword matching."""
+    for part in msg.walk():
+        if part.get_content_maintype() == "multipart":
+            continue
+        if part.get_content_type() != "text/plain":
+            continue
+        payload = part.get_payload(decode=True)
+        if not payload:
+            continue
+        charset = part.get_content_charset() or "utf-8"
+        try:
+            return payload[:_BODY_SCAN_CHARS].decode(charset, errors="replace")
+        except (LookupError, ValueError):
+            return payload[:_BODY_SCAN_CHARS].decode("utf-8", errors="replace")
+
+    # Fall back to a stripped text/html part
+    for part in msg.walk():
+        if part.get_content_type() != "text/html":
+            continue
+        payload = part.get_payload(decode=True)
+        if not payload:
+            continue
+        charset = part.get_content_charset() or "utf-8"
+        try:
+            html = payload[:_BODY_SCAN_CHARS].decode(charset, errors="replace")
+        except (LookupError, ValueError):
+            html = payload[:_BODY_SCAN_CHARS].decode("utf-8", errors="replace")
+        return re.sub(r"<[^>]+>", " ", html)
+
+    return ""
 
 
 # ── Fetch emails (synchronous — call via run_in_executor) ─────────────────────
@@ -180,7 +223,8 @@ def fetch_scanner_emails_sync(date_from: str, date_to: str) -> tuple[list[dict],
 
             total_with_attachments += 1
 
-            if not _is_photocopier(from_str, subject):
+            body = _extract_body_text(full_msg)
+            if not _is_photocopier(from_str, subject, body):
                 continue
 
             scanner_emails.append({
