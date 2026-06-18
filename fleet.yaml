@@ -15,23 +15,19 @@ helm:
     ollama:
       model: llama3.2
 
-  # ── Secret values via Rancher ──────────────────────────────────────────────
-  # Create a Rancher Secret in the docnamer namespace with key values.yaml:
+  # ── Secret values ────────────────────────────────────────────────────────
+  # The chart deploys standalone with safe defaults: IMAP is left disabled
+  # until configured, and AUTH_PASSWORD/IMAP_* are auto-generated or preserved
+  # across upgrades by helm/docnamer/templates/secret.yaml.
   #
-  #   imap:
-  #     host: mail.example.com
-  #     port: 993
-  #     username: scanner@example.com
-  #     password: <app-password>
-  #     useSsl: "true"
-  #     mailbox: INBOX
+  # Fleet's helm.valuesFrom.secretKeyRef has no real "optional" support — if
+  # the referenced Secret doesn't exist yet, the whole bundle fails to sync
+  # ("Secrets ... not found"). So real credentials must NOT be wired through
+  # Fleet. Once the app is deployed, set IMAP creds directly on the generated
+  # Secret instead — secret.yaml preserves them across future `helm upgrade`
+  # runs, the same way it already preserves AUTH_PASSWORD:
   #
-  # auth.password is auto-generated on first install if not provided here.
-  valuesFrom:
-    - secretKeyRef:
-        name: docnamer-credentials
-        key: values.yaml
-        optional: true   # allow first-boot before the secret exists
+  #   kubectl -n docnamer edit secret docnamer-env
 
 # ── Per-cluster ingress — domain read from the cluster label ────────────────
 # Rancher patches each cluster with {"metadata":{"labels":{"domain":"..."}}}
