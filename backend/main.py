@@ -3,6 +3,7 @@ import base64
 import json
 import logging
 import secrets
+import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -14,9 +15,9 @@ from fastapi import BackgroundTasks
 from pydantic import BaseModel
 
 import database as db
-from config import AUTH_PASSWORD, AUTH_USERNAME, ALLOWED_ORIGINS, OUTPUT_DIR
+from config import AUTH_PASSWORD, AUTH_USERNAME, ALLOWED_ORIGINS, IMAGE_TAG, OUTPUT_DIR
 from scanner import run_scan_job, start_watch, stop_watch
-from services import mail_service
+from services import llm_service, mail_service, storage_service
 from services.pdf_slicer import build_zip
 
 log = logging.getLogger("docnamer")
@@ -92,6 +93,11 @@ def health():
     return {"status": "ok", "mail_configured": mail_service.is_configured()}
 
 
+@app.get("/version")
+def version():
+    return {"image_tag": IMAGE_TAG}
+
+
 # ── Mail configuration ────────────────────────────────────────────────────────
 
 class MailConfig(BaseModel):
@@ -128,6 +134,21 @@ async def test_mail():
     loop = asyncio.get_running_loop()
     ok, message = await loop.run_in_executor(None, mail_service.test_connection)
     return {"ok": ok, "message": message}
+
+
+# ── LLM ───────────────────────────────────────────────────────────────────────
+
+@app.post("/llm/test")
+async def test_llm():
+    ok, message = await llm_service.check_health()
+    return {"ok": ok, "message": message}
+
+
+# ── Storage ───────────────────────────────────────────────────────────────────
+
+@app.get("/storage")
+def storage():
+    return storage_service.get_disk_usage()
 
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────
@@ -169,11 +190,30 @@ def cancel_job(job_id: str):
     job = db.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job["status"] not in ("pending", "running"):
-        raise HTTPException(status_code=400, detail=f"Cannot cancel a {job['status']} job")
-    db.update_job_status(job_id, "cancelled")
-    db.add_event(job_id, "warn", "Job cancelled by user")
-    return {"status": "cancelled"}
+
+    if job["status"] in ("pending", "running"):
+        db.update_job_status(job_id, "cancelled")
+        db.add_event(job_id, "warn", "Job cancelled by user")
+        return {"status": "cancelled"}
+
+    # Terminal job — delete its files and records instead of cancelling.
+    # Re-fetch right before acting in case it finished between the check above
+    # and here (run_scan_job runs as a background task in this same process).
+    job = db.get_job(job_id)
+    if job["status"] in ("pending", "running"):
+        raise HTTPException(status_code=409, detail="Job started running — try again")
+
+    shutil.rmtree(OUTPUT_DIR / job_id, ignore_errors=True)
+    (OUTPUT_DIR / f"{job_id}.zip").unlink(missing_ok=True)
+    db.delete_job(job_id)
+    return {"status": "deleted"}
+
+
+@app.get("/jobs/{job_id}/log")
+def get_job_log(job_id: str):
+    if not db.get_job(job_id):
+        raise HTTPException(status_code=404, detail="Job not found")
+    return db.get_events_since(job_id, 0)
 
 
 @app.get("/jobs/{job_id}/events")

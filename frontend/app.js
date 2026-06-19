@@ -41,8 +41,8 @@ document.querySelectorAll('.step-item').forEach(el =>
   el.addEventListener('click', () => {
     const idx = Number(el.dataset.tab);
     showTab(idx);
-    if (idx === 2) { updateConfigBar(); loadWatchConfig(); }
-    if (idx === 3) loadJobs();
+    if (idx === 2) { updateConfigBar(); loadWatchConfig(); testLlmConfig(); }
+    if (idx === 3) { loadJobs(); loadStorage(); }
   })
 );
 
@@ -155,6 +155,33 @@ function setMailBadge(s) {
   }
 }
 
+// ── LLM health ────────────────────────────────────────────────────────────────
+
+async function testLlmConfig() {
+  try {
+    const { ok, message } = await POST('/llm/test');
+    setLlmBadge(ok, message);
+  } catch (e) {
+    setLlmBadge(false, e.message);
+  }
+}
+
+function setLlmBadge(ok, message) {
+  const badge = document.getElementById('llmBadge');
+  const label = document.getElementById('llmLabel');
+  const sub   = document.getElementById('llmSub');
+  if (ok) {
+    badge.className = 'badge badge-connected';
+    badge.innerHTML = '<span class="dot"></span> Connected';
+    label.textContent = 'LLM ready';
+  } else {
+    badge.className = 'badge badge-disconnected';
+    badge.innerHTML = '<span class="dot"></span> Unavailable';
+    label.textContent = 'LLM not reachable';
+  }
+  sub.textContent = message;
+}
+
 // ── Tab 2: Process ────────────────────────────────────────────────────────────
 
 function updateConfigBar() {
@@ -213,6 +240,15 @@ async function startScan() {
     document.getElementById('startBtn').style.display  = 'inline-flex';
     document.getElementById('cancelBtn').style.display = 'none';
   }
+}
+
+async function deleteJob(jobId) {
+  if (!confirm('Delete this job and all its files? This cannot be undone.')) return;
+  try {
+    await DELETE(`/jobs/${jobId}`);
+    loadJobs();
+    loadStorage();
+  } catch (e) { alert('Could not delete: ' + e.message); }
 }
 
 async function cancelScan() {
@@ -392,6 +428,27 @@ async function loadJobs() {
   } catch (e) { console.error('Failed to load jobs', e); }
 }
 
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let i = -1;
+  do { n /= 1024; i++; } while (n >= 1024 && i < units.length - 1);
+  return `${n.toFixed(1)} ${units[i]}`;
+}
+
+async function loadStorage() {
+  const bar = document.getElementById('storageBar');
+  try {
+    const s = await GET('/storage');
+    const pct = Math.round((s.disk_used / s.disk_total) * 100);
+    bar.style.display = 'flex';
+    bar.innerHTML = `
+      <span>Output files: <strong>${formatBytes(s.output_bytes)}</strong></span>
+      <span class="separator">|</span>
+      <span>Disk: <strong>${formatBytes(s.disk_used)} / ${formatBytes(s.disk_total)}</strong> used (${pct}%)</span>`;
+  } catch { bar.style.display = 'none'; }
+}
+
 function renderJobCards(jobs) {
   const container = document.getElementById('jobCards');
   if (!jobs.length) {
@@ -403,6 +460,7 @@ function renderJobCards(jobs) {
     const docLabel = `${j.total_documents} doc${j.total_documents === 1 ? '' : 's'}`;
     const emailLabel = `${j.total_emails} email${j.total_emails === 1 ? '' : 's'}`;
     const canDownload = j.status === 'completed' && j.total_documents > 0;
+    const isTerminal = ['completed', 'failed', 'cancelled'].includes(j.status);
     const isCurrentJob = j.id === state.currentJobId;
 
     return `
@@ -425,6 +483,9 @@ function renderJobCards(jobs) {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Download All
             </a>` : ''}
+          ${isTerminal ? `
+            <button class="btn btn-outline btn-sm" title="Delete job and files"
+                    onclick="event.stopPropagation();deleteJob('${j.id}')">🗑</button>` : ''}
           <span class="job-chevron" style="color:var(--gray-400);font-size:.85rem">${isCurrentJob ? '▲' : '▼'}</span>
         </div>
       </div>
@@ -466,7 +527,8 @@ async function loadDocsForCard(jobId) {
     const [job, docs] = await Promise.all([GET(`/jobs/${jobId}`), GET(`/jobs/${jobId}/documents`)]);
 
     if (!docs.length) {
-      container.innerHTML = renderEmptyDocs(job);
+      const events = job.status === 'failed' ? await GET(`/jobs/${jobId}/log`).catch(() => []) : [];
+      container.innerHTML = renderEmptyDocs(job, events);
       return;
     }
 
@@ -510,7 +572,7 @@ async function loadDocsForCard(jobId) {
   }
 }
 
-function renderEmptyDocs(job) {
+function renderEmptyDocs(job, events = []) {
   if (job.status === 'running') {
     return `<div class="empty-state">Scan in progress…</div>`;
   }
@@ -524,6 +586,15 @@ function renderEmptyDocs(job) {
         <li>Emails exist but have no PDF attachments (images-only scans)</li>
         <li>Wrong mailbox / folder name</li>
       </ul>
+    </div>`;
+  }
+  if (job.status === 'failed') {
+    const messages = events.filter(e => e.level === 'error' || e.level === 'warn');
+    return `<div class="diagnosis-card error">
+      <strong>Scan failed.</strong>
+      ${messages.length
+        ? `<ul>${messages.map(e => `<li>${escHtml(e.message)}</li>`).join('')}</ul>`
+        : 'No further detail was recorded.'}
     </div>`;
   }
   return `<div class="empty-state">${job.status}</div>`;
@@ -590,6 +661,10 @@ function escHtml(s) {
 (async function init() {
   loadConfig();
 
+  GET('/version').then(v => {
+    document.getElementById('versionInfo').textContent = `DocNamer · ${v.image_tag}`;
+  }).catch(() => {});
+
   // Restore step completion state from server
   const [mailStatus, jobs] = await Promise.allSettled([
     GET('/mail/status'),
@@ -636,4 +711,6 @@ function escHtml(s) {
 
   // Load watch mode state into the Process tab
   loadWatchConfig();
+  testLlmConfig();
+  loadStorage();
 })();

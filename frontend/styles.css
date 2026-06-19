@@ -343,6 +343,12 @@ tr:hover td { background: #fff; }
   color: #78350f;
 }
 .diagnosis-card strong { display: block; margin-bottom: 6px; }
+.diagnosis-card.error {
+  background: var(--red-light);
+  border-color: #f3a4a1;
+  color: var(--red);
+}
+.diagnosis-card ul { padding-left: 18px; margin-top: 6px; }
 
 /* ── No jobs state ── */
 .no-jobs {
@@ -387,6 +393,13 @@ tr:hover td { background: #fff; }
 }
 .toggle input:checked + .toggle-slider { background: var(--green); }
 .toggle input:checked + .toggle-slider::before { transform: translateX(18px); }
+
+.app-footer {
+  text-align: center;
+  padding: 14px;
+  font-size: .75rem;
+  color: var(--gray-400);
+}
 
 @media (max-width: 680px) {
   .app { flex-direction: column; padding: 12px; gap: 14px; }

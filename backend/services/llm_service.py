@@ -104,6 +104,21 @@ def _fallback(total_pages: int) -> list[dict]:
     }]
 
 
+async def check_health() -> tuple[bool, str]:
+    """Ping Ollama and confirm LLM_MODEL has actually been pulled."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{LLM_BASE_URL}/api/tags")
+            resp.raise_for_status()
+            tags = [m.get("name", "") for m in resp.json().get("models", [])]
+    except Exception as exc:
+        return False, f"Ollama unreachable: {exc}"
+
+    if any(tag.startswith(LLM_MODEL) for tag in tags):
+        return True, f"{LLM_MODEL} ready ({len(tags)} model(s) pulled)"
+    return False, f"{LLM_MODEL} not pulled yet ({len(tags)} other model(s) available)"
+
+
 async def analyze_document(client_name: str, pages: list[str]) -> list[dict]:
     content, truncated = _truncate(pages)
     prompt = _build_prompt(client_name, content, truncated)

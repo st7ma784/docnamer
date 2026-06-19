@@ -30,6 +30,9 @@ if not ALLOWED_ORIGINS:
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://ollama:11434")
 LLM_MODEL = os.environ.get("LLM_MODEL", "llama3.2")
 
+# ── Build info ────────────────────────────────────────────────────────────────
+IMAGE_TAG = os.environ.get("IMAGE_TAG", "unknown")
+
 # Characters sent to the LLM per document — guards against context overflow.
 # llama3.2 has an 8k token context; ~24 000 chars ≈ 6 000 tokens, leaving
 # headroom for the prompt template and the JSON response.

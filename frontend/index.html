@@ -123,6 +123,14 @@
 
       <div id="configBar" class="config-bar" style="display:none"></div>
 
+      <div class="connect-status" id="llmStatus">
+        <span id="llmBadge" class="badge badge-disconnected"><span class="dot"></span> Checking…</span>
+        <div class="connect-info">
+          <h3 id="llmLabel">Checking LLM connection…</h3>
+          <p id="llmSub"></p>
+        </div>
+      </div>
+
       <div id="scanActions">
         <button class="btn btn-success" id="startBtn" onclick="startScan()">Start Scan</button>
       </div>
@@ -208,6 +216,7 @@
         <h2 class="panel-title" style="margin-bottom:0">Results</h2>
         <button class="btn btn-outline btn-sm" onclick="loadJobs()">↻ Refresh</button>
       </div>
+      <div id="storageBar" class="config-bar" style="display:none"></div>
       <div id="jobCards" class="job-cards">
         <div class="no-jobs">
           <p>No scans yet — complete Steps 1–3 to get started.</p>
@@ -217,6 +226,8 @@
 
   </main>
 </div>
+
+<footer class="app-footer"><span id="versionInfo"></span></footer>
 
 <script src="app.js"></script>
 </body>

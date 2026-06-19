@@ -183,6 +183,15 @@ def get_documents(job_id: str) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def delete_job(job_id: str):
+    """Remove a job's row, events, and documents. Leaves pdf_hashes intact —
+    those dedupe re-scanned content across jobs, including deleted ones."""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM documents WHERE job_id = ?", (job_id,))
+        conn.execute("DELETE FROM job_events WHERE job_id = ?", (job_id,))
+        conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+
+
 # ── Startup recovery ─────────────────────────────────────────────────────────
 
 def recover_stuck_jobs():
