@@ -3,7 +3,22 @@ defaultNamespace: docnamer
 helm:
   chart: ./helm/docnamer
 
-  # ── Base values (no domain-specific config here) ───────────────────────────
+  # ── ClusterOS domain contract ────────────────────────────────────────────
+  # node-agent publishes the cluster's domain (and the Cloudflare-safe nginx
+  # annotations needed to sit behind the cloudflared tunnel) into this
+  # ConfigMap. It exists in both fleet-local and fleet-default on every
+  # ClusterOS node, so this resolves regardless of which namespace the
+  # GitRepo targets. The chart reads it as global.clusterDomain /
+  # global.ingressAnnotations (see helm/docnamer/templates/_helpers.tpl) and
+  # derives the host docnamer.<clusterDomain> automatically — no per-cluster
+  # template substitution needed.
+  valuesFrom:
+    - configMapKeyRef:
+        name: clusteros-helm-values
+        namespace: fleet-local
+        key: values.yaml
+
+  # ── Base values ──────────────────────────────────────────────────────────
   values:
     image:
       repository: ghcr.io/st7ma784/docnamer
@@ -14,6 +29,13 @@ helm:
 
     ollama:
       model: llama3.2
+
+    # Cloudflared terminates TLS at the edge and forwards plain HTTP to
+    # ingress-nginx, so the ingress itself needs no TLS secret — just enable
+    # it; the host is derived from global.clusterDomain above.
+    ingress:
+      enabled: true
+      className: nginx
 
   # ── Secret values ────────────────────────────────────────────────────────
   # The chart deploys standalone with safe defaults: IMAP is left disabled
@@ -28,28 +50,3 @@ helm:
   # runs, the same way it already preserves AUTH_PASSWORD:
   #
   #   kubectl -n docnamer edit secret docnamer-env
-
-# ── Per-cluster ingress — domain read from the cluster label ────────────────
-# Rancher patches each cluster with {"metadata":{"labels":{"domain":"..."}}}
-# shortly after registration. Fleet substitutes ${cluster.metadata.labels.domain}
-# before rendering the Helm chart, so no domain is hardcoded in Git.
-targetCustomizations:
-  - name: cluster-with-domain
-    clusterSelector:
-      matchExpressions:
-        - key: domain
-          operator: Exists
-    helm:
-      values:
-        ingress:
-          enabled: true
-          className: nginx
-          hosts:
-            - host: "docnamer.${cluster.labels.domain}"
-              paths:
-                - path: /
-                  pathType: Prefix
-          tls:
-            - secretName: docnamer-tls
-              hosts:
-                - "docnamer.${cluster.labels.domain}"

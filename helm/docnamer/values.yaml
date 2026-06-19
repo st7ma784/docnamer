@@ -1,5 +1,13 @@
 replicaCount: 1  # must be 1 — SQLite on a ReadWriteOnce PVC does not support multiple replicas
 
+# Cluster-wide settings published by ClusterOS node-agent via the
+# clusteros-helm-values ConfigMap (see fleet.yaml). Left empty here so the
+# chart behaves sanely on a plain `helm install` outside of ClusterOS/Fleet —
+# in that case ingress.hosts below is used instead.
+global:
+  clusterDomain: ""
+  ingressAnnotations: {}
+
 image:
   repository: ghcr.io/st7ma784/docnamer  # replace OWNER with your GitHub org/username
   tag: "0.1.0"

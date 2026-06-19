@@ -19,7 +19,7 @@ DocNamer has been deployed.
 {{- end }}
 
 {{- if .Values.ingress.enabled }}
-  App URL: https://{{ (first .Values.ingress.hosts).host }}
+  App URL: https://{{ include "docnamer.host" . }}
 {{- else }}
   Ingress is disabled. Access the app via:
     kubectl port-forward svc/{{ include "docnamer.fullname" . }} 8000:8000 -n {{ .Release.Namespace }}

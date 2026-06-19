@@ -29,3 +29,18 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/name: {{ include "docnamer.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
+
+{{/*
+Effective ingress host. Prefers the ClusterOS-published cluster domain
+(global.clusterDomain, injected by Fleet via the clusteros-helm-values
+ConfigMap) so the service lands at docnamer.<clusterDomain> automatically.
+Falls back to the first entry of .Values.ingress.hosts for manual/non-Fleet
+installs.
+*/}}
+{{- define "docnamer.host" -}}
+{{- if .Values.global.clusterDomain -}}
+{{- printf "docnamer.%s" .Values.global.clusterDomain -}}
+{{- else if .Values.ingress.hosts -}}
+{{- (first .Values.ingress.hosts).host -}}
+{{- end -}}
+{{- end }}
